@@ -5,6 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include <functional>
+#include <tuple>
 using namespace std;
 using namespace std::chrono;
 
@@ -46,224 +47,302 @@ int xor64() {
     return int(x&0x7fffffff);
 }
 
-struct Input
+struct Node
 {
-    int T = 0;
-    int H = 0;
-    int W = 0;
-    int y0 = 0;
-    vector<vector<int>> h;
-    vector<vector<int>> v;
-    int K;
-    vector<int> S;
-    vector<int> D;
+    int x, y;
+    int cn;
+    int ln;
+    vector<Node *> C;
 };
-
-struct Output
-{
-    int M = 0;
-    vector<int> k;
-    vector<int> y;
-    vector<int> x;
-    vector<int> s;
-};
-
-int DX[] = {1, -1, 0, 0};
-int DY[] = {0, 0, 1, -1};
-
-bool check(const Input &input, const Output &output)
-{
-    vector<vector<bool>> F(input.H, vector<bool>(input.W));
-    for (int t=0; t<input.T; t++)
-    {
-        vector<vector<bool>> A(input.H, vector<bool>(input.W));
-        function<void(int, int)> f = [&](int x, int y)
-        {
-            if (A[y][x])
-                return;
-            A[y][x] = true;
-            for (int d=0; d<4; d++)
-            {
-                int tx = x+DX[d];
-                int ty = y+DY[d];
-                if (0<=tx && tx<input.W &&
-                    0<=ty && ty<input.H &&
-                    !F[ty][tx] &&
-                    (y==ty || input.h[min(y, ty)][x]==0) &&
-                    (x==tx || input.v[y][min(x, tx)]==0))
-                    f(tx, ty);
-            }
-        };
-        if (!F[input.y0][0])
-            f(0, input.y0);
-
-        for (int i=0; i<output.M; i++)
-            if (output.s[i]==t)
-            {
-                if (!A[output.y[i]][output.x[i]])
-                    return false;
-                A[output.y[i]][output.x[i]] = false;
-                F[output.y[i]][output.x[i]] = true;
-            }
-
-        for (int i=0; i<output.M; i++)
-            if (input.D[output.k[i]]==t)
-                F[output.y[i]][output.x[i]] = false;
-
-        A = vector<vector<bool>>(input.H, vector<bool>(input.W));
-        if (!F[input.y0][0])
-            f(0, input.y0);
-
-        for (int i=0; i<output.M; i++)
-            if (input.D[output.k[i]]==t)
-                if (!A[output.y[i]][output.x[i]])
-                    return false;
-    }
-    return true;
-}
-
-int calc_score(const Input &input, const Output &output)
-{
-    int score = 0;
-    for (int i=0; i<output.M; i++)
-        score += (input.D[output.k[i]]-input.S[output.k[i]]+1)*1000000/(input.H*input.W*input.T);
-    return score;
-}
 
 int main()
 {
-    Input input;
-    cin>>input.T>>input.H>>input.W>>input.y0;
-    input.h = vector<vector<int>>(input.H-1, vector<int>(input.W));
-    for (int y=0; y<input.H-1; y++)
+    // 入力
+    int T, H, W, y0;
+    cin>>T>>H>>W>>y0;
+    vector<vector<int>> h(H-1, vector<int>(W));
+    for (int y=0; y<H-1; y++)
     {
         string t;
         cin>>t;
-        for (int x=0; x<input.W; x++)
-            input.h[y][x] = t[x]-'0';
+        for (int x=0; x<W; x++)
+            h[y][x] = t[x]-'0';
     }
-    input.v = vector<vector<int>>(input.H, vector<int>(input.W-1));
-    for (int y=0; y<input.H; y++)
+    vector<vector<int>> v(H, vector<int>(W-1));
+    for (int y=0; y<H; y++)
     {
         string t;
         cin>>t;
-        for (int x=0; x<input.W-1; x++)
-            input.v[y][x] = t[x]-'0';
+        for (int x=0; x<W-1; x++)
+            v[y][x] = t[x]-'0';
     }
-    cin>>input.K;
-    input.S = vector<int>(input.K);
-    input.D = vector<int>(input.K);
-    for (int k=0; k<input.K; k++)
+    int K;
+    cin>>K;
+    vector<int> S(K), D(K);
+    for (int k=0; k<K; k++)
     {
-        cin>>input.S[k]>>input.D[k];
-        input.S[k]--;
-        input.D[k]--;
+        cin>>S[k]>>D[k];
+        S[k]--;
+        D[k]--;
     }
 
     system_clock::time_point start = system_clock::now();
 
     my_exp_init();
 
-    Output output;
-    int score = 0;
-    int best_score = score;
-    Output best_output = output;
+    const int DX[] = {1, -1, 0, 0};
+    const int DY[] = {0, 0, 1, -1};
 
-    double temp_inv;
-    int iter;
-    for (iter=0; ; iter++)
+    // 木の作成
+    Node *tree;
     {
-        if (iter%0x10==0)
-        {
-            system_clock::time_point now = system_clock::now();
-            double time = chrono::duration_cast<chrono::nanoseconds>(now-start).count()*1e-9/TIME;
-            if (time>1.0)
-                break;
-            double temp = 100.*(1.0-time);
-            temp_inv = 1./temp;
-        }
+        tree = new Node();
+        tree->x = 0;
+        tree->y = y0;
 
-        Output output2 = output;
+        vector<Node *> V;
+        V.push_back(tree);
+        vector<vector<bool>> U(H, vector<bool>(W));
+        U[y0][0] = true;
 
-        switch (xor64()%4)
+        for (int i=0; i<(int)V.size(); i++)
         {
-        case 0:
-        {
-            if (output2.M==input.K)
-                continue;
-            int k = 0;
-            while (true)
+            Node *n = V[i];
+            int r = xor64()%4;
+
+            for (int d=0; d<4; d++)
             {
-                k = xor64()%input.K;
-                bool ok = true;
-                for (int kk: output2.k)
-                    if (kk==k)
-                        ok = false;
-                if (ok)
-                    break;
+                int tx = n->x+DX[d];
+                int ty = n->y+DY[d];
+                if (0<=tx && tx<W &&
+                    0<=ty && ty<H &&
+                    !U[ty][tx] &&
+                    (n->y==ty || h[min(n->y, ty)][n->x]==0) &&
+                    (n->x==tx || v[n->y][min(n->x, tx)]==0))
+                {
+                    U[ty][tx] = true;
+
+                    Node *c = new Node();
+                    c->x = tx;
+                    c->y = ty;
+
+                    n->C.push_back(c);
+                    V.push_back(c);
+                }
             }
-            output2.M++;
-            output2.k.push_back(k);
-            output2.y.push_back(xor64()%input.H);
-            output2.x.push_back(xor64()%input.W);
-            output2.s.push_back(xor64()%(input.S[k]+1));
-            break;
-        }
-        case 1:
-        {
-            if (output2.M==0)
-                continue;
-            int i=xor64()%output2.M;
-            output2.M--;
-            output2.k.erase(output2.k.begin()+i);
-            output2.y.erase(output2.y.begin()+i);
-            output2.x.erase(output2.x.begin()+i);
-            output2.s.erase(output2.s.begin()+i);
-            break;
-        }
-        case 2:
-        {
-            if (output2.M==0)
-                continue;
-            int i=xor64()%output2.M;
-            output2.y[i] = xor64()%input.H;
-            output2.x[i] = xor64()%input.W;
-            break;
-        }
-        case 3:
-        {
-            if (output2.M==0)
-                continue;
-            int i=xor64()%output2.M;
-            output2.s[i] = xor64()%(input.S[output2.k[i]]+1);
-            break;
-        }
         }
 
-        if (!check(input, output2))
-            continue;
-
-        int score2 = calc_score(input, output2);
-
-        if (score2>score ||
-            //exp((score2-score)*temp_inv)*0x80000000>xor64())
-            my_exp((score2-score)*temp_inv)>xor64())
+        function<void(Node *)> f = [&](Node *n)
         {
-            score = score2;
-            output = output2;
+            n->cn = 1;
+            n->ln = n->C.empty()?1:0;
 
-            if (score>best_score)
+            for (Node *c: n->C)
             {
-                best_score = score;
-                best_output = output;
+                f(c);
+                n->cn += c->cn;
+                n->ln += c->ln;
+            }
+        };
+        f(tree);
+    }
+
+    /*
+    // 木の表示
+    {
+        vector<string> B(H*2+1, string(W*4+1, ' '));
+        B[0][0] = B[0][W*4] = B[H*2][0] = B[H*2][W*4] = '+';
+        for (int x=1; x<W*4; x++)
+            B[0][x] = B[H*2][x] = '-';
+        for (int y=1; y<H*2; y++)
+        {
+            if (y!=y0*2+1)
+                B[y][0] = '|';
+            B[y][W*4] = '|';
+        }
+
+        function<void(Node *)> f = [&](Node *n)
+        {
+            B[n->y*2+1][n->x*4+2] = '+';
+            for (Node *c: n->C)
+            {
+                if (n->x==c->x)
+                    B[(n->y+c->y)+1][n->x*4+2] = '|';
+                else
+                    for (int i=0; i<3; i++)
+                        B[n->y*2+1][(n->x+c->x)*2+i+1] = '-';
+                f(c);
+            }
+        };
+        f(tree);
+
+        for (string b: B)
+            cout<<b<<endl;
+    }
+    */
+
+    // ここを根とする部分木に植える
+    vector<Node *> ST;
+    {
+        function<void(Node *)> f = [&](Node *n)
+        {
+            if (n->C.size()==0)
+                return;
+            if (n->C.size()==1)
+                f(n->C[0]);
+            if (n->C.size()>=2)
+            {
+                for (Node *c: n->C)
+                {
+                    if (c->cn<32 || n->ln==1)
+                        ST.push_back(c);
+                    else
+                        f(c);
+                }
+            }
+        };
+        f(tree);
+    }
+    int sn = (int)ST.size();
+
+    // 区間の区切り
+    vector<vector<int>> SP(sn);
+    for (int i=0; i<sn; i++)
+    {
+        SP[i].push_back(0);
+        SP[i].push_back(T);
+        for (int j=0; j<7; j++)
+            SP[i].push_back(xor64()%(T-1)+1);
+        sort(SP[i].begin(), SP[i].end());
+    }
+
+    // 長さの降順にソート
+    vector<int> I;
+    for (int i=0; i<K; i++)
+        I.push_back(i);
+    sort(I.begin(), I.end(), [&](int x, int y){return D[x]-S[x]>D[y]-S[y];});
+
+    // 長さの降順に、なるべく短い区間に割り当てる
+    vector<vector<vector<int>>> C(sn);
+    for (int i=0; i<sn; i++)
+        C[i].resize(SP[i].size());
+    for (int i: I)
+    {
+        int bl = T+1;
+        int bs = 0;
+        int bp = 0;
+        for (int s=0; s<sn; s++)
+            for (int p=0; p<(int)SP[s].size()-1; p++)
+                if ((int)C[s][p].size()<ST[s]->cn &&
+                    SP[s][p]<=S[i] && D[i]<SP[s][p+1])
+                {
+                    int l = SP[s][p+1]-SP[s][p];
+                    if (l<bl)
+                    {
+                        bl = l;
+                        bs = s;
+                        bp = p;
+                    }
+                }
+        if (bl<T+1)
+            C[bs][bp].push_back(i);
+    }
+
+    // 配置
+    vector<int> ans_k, ans_x, ans_y, ans_s;
+
+    for (int s=0; s<sn; s++)
+    {
+        vector<int> X, Y, DD;
+        function<void(Node *, int)> f = [&](Node *n, int d)
+        {
+            X.push_back(n->x);
+            Y.push_back(n->y);
+            DD.push_back(d);
+            for (Node *c: n->C)
+                f(c, d+1);
+        };
+        f(ST[s], 0);
+
+        vector<tuple<int, int, int>> DXY;
+        for (int i=0; i<(int)X.size(); i++)
+            DXY.push_back({DD[i], X[i], Y[i]});
+        sort(DXY.begin(), DXY.end());
+        for (int i=0; i<(int)X.size(); i++)
+        {
+            DD[i] = get<0>(DXY[i]);
+            X[i] = get<1>(DXY[i]);
+            Y[i] = get<2>(DXY[i]);
+        }
+
+        for (int p=0; p<(int)SP[s].size()-1; p++)
+        {
+            sort(C[s][p].begin(), C[s][p].end(), [&](int x, int y){return D[x]<D[y];});
+            for (int i=0; i<(int)C[s][p].size(); i++)
+            {
+                ans_k.push_back(C[s][p][i]);
+                ans_x.push_back(X[i]);
+                ans_y.push_back(Y[i]);
+                ans_s.push_back(SP[s][p]);
             }
         }
     }
 
-    cerr<<"Iteration: "<<iter<<endl;
-    cerr<<"Score: "<<best_score<<endl;
+    // 出力
+    cout<<ans_k.size()<<endl;
+    for (int i=0; i<(int)ans_k.size(); i++)
+        cout<<ans_k[i]+1<<" "<<ans_y[i]<<" "<<ans_x[i]<<" "<<ans_s[i]+1<<endl;
 
-    cout<<output.M<<endl;
-    for (int i=0; i<output.M; i++)
-        cout<<output.k[i]+1<<" "<<output.y[i]<<" "<<output.x[i]<<" "<<output.s[i]+1<<endl;
+    system_clock::time_point end = system_clock::now();
+
+    // 情報出力
+    {
+        // d
+        int d = 0;
+        vector<vector<bool>> M(H+1, vector<bool>(W+1));
+        for (int x=0; x<W+1; x++)
+            M[0][x] = M[H][x] = true;
+        for (int y=0; y<H+1; y++)
+            M[y][0] = M[y][W] = true;
+        for (int y=0; y<H-1; y++)
+            for (int x=0; x<W; x++)
+                if (h[y][x]!=0)
+                    M[y+1][x] = M[y+1][x+1] = true;
+        for (int y=0; y<H; y++)
+            for (int x=0; x<W-1; x++)
+                if (v[y][x]!=0)
+                    M[y][x+1] = M[y+1][x+1] = true;
+        for (int y=1; y<H; y++)
+            for (int x=1; x<W; x++)
+                if (!M[y][x])
+                {
+                    int t = 9999;
+                    for (int dy=-4; dy<=4; dy++)
+                        for (int dx=-4; dx<=4; dx++)
+                        {
+                            int tx = x+dx;
+                            int ty = y+dy;
+                            if (0<=tx && tx<=W &&
+                                0<=ty && ty<=H &&
+                                M[ty][tx])
+                                t = min(t, abs(dx)+abs(dy));
+                        }
+                    d = max(d, t);
+                }
+
+        // L
+        int L = 0;
+        for (int k=0; k<K; k++)
+            L += D[k]-S[k]+1;
+
+        // 実行時間
+        double time = chrono::duration_cast<chrono::nanoseconds>(end-start).count()*1e-9;
+
+        // スコア
+        int score = 0;
+        for(int k: ans_k)
+            score += 1000000/(H*W*T)*(D[k]-S[k]+1);
+
+        fprintf(stderr, "%d %4d %5.3f %5.3f %6d\n", d, K, (double)L/(H*W*T), time, score);
+    }
 }
