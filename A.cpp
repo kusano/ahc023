@@ -9,7 +9,7 @@
 using namespace std;
 using namespace std::chrono;
 
-const double TIME = 1.8;
+const double TIME = 1.5;
 
 const int expN = 1024;
 const double expX = 16;
@@ -205,65 +205,172 @@ int main()
     }
     int sn = (int)ST.size();
 
-    int best_score = 0;
-    vector<vector<int>> SPbest(sn);
-    vector<vector<vector<int>>> Cbest(sn);
+    // 長さの降順にソート
+    vector<int> I;
+    for (int i=0; i<K; i++)
+        I.push_back(i);
+    sort(I.begin(), I.end(), [&](int x, int y){return D[x]-S[x]>D[y]-S[y];});
 
-    for (int iter=0; iter<128; iter++)
+    // 区間の区切り
+    vector<vector<int>> SP(sn);
+    for (int i=0; i<sn; i++)
     {
-        // 区間の区切り
-        vector<vector<int>> SP(sn);
-        for (int i=0; i<sn; i++)
-        {
-            SP[i].push_back(0);
-            SP[i].push_back(T);
-            for (int j=0; j<7; j++)
-                SP[i].push_back(xor64()%(T-1)+1);
-            sort(SP[i].begin(), SP[i].end());
-        }
+        SP[i].push_back(0);
+        SP[i].push_back(T);
+        for (int j=0; j<7; j++)
+            while (true)
+            {
+                int t = xor64()%(T-1)+1;
+                bool ok = true;
+                for (int p: SP[i])
+                    if (p==t)
+                        ok = false;
+                if (ok)
+                {
+                    SP[i].push_back(t);
+                    break;
+                }
+            }
+        sort(SP[i].begin(), SP[i].end());
+    }
 
-        // 長さの降順にソート
-        vector<int> I;
-        for (int i=0; i<K; i++)
-            I.push_back(i);
-        sort(I.begin(), I.end(), [&](int x, int y){return D[x]-S[x]>D[y]-S[y];});
+    vector<bool> used(K);
+    int score = 0;
 
-        // 長さの降順に、なるべく短い区間に割り当てる
-        vector<vector<vector<int>>> C(sn);
-        for (int i=0; i<sn; i++)
-            C[i].resize(SP[i].size());
-        for (int i: I)
-        {
-            int bl = T+1;
-            int bs = 0;
-            int bp = 0;
-            for (int s=0; s<sn; s++)
-                for (int p=0; p<(int)SP[s].size()-1; p++)
-                    if ((int)C[s][p].size()<ST[s]->cn &&
-                        SP[s][p]<=S[i] && D[i]<SP[s][p+1])
-                    {
-                        int l = SP[s][p+1]-SP[s][p];
-                        if (l<bl)
-                        {
-                            bl = l;
-                            bs = s;
-                            bp = p;
-                        }
-                    }
-            if (bl<T+1)
-                C[bs][bp].push_back(i);
-        }
+    // 長さの降順に、なるべく短い区間に割り当てる
+    vector<vector<vector<int>>> C(sn);
+    for (int i=0; i<sn; i++)
+        C[i].resize(SP[i].size()-1);
 
-        int score = 0;
+    for (int i: I)
+    {
+        int bl = T+1;
+        int bs = 0;
+        int bp = 0;
         for (int s=0; s<sn; s++)
-            for (int p=0; p<(int)C[s].size(); p++)
-                for (int c: C[s][p])
-                    score += 1000000/(H*W*T)*(D[c]-S[c]+1);
-        if (score>best_score)
+            for (int p=0; p<(int)SP[s].size()-1; p++)
+                if ((int)C[s][p].size()<ST[s]->cn &&
+                    SP[s][p]<=S[i] && D[i]<SP[s][p+1])
+                {
+                    int l = SP[s][p+1]-SP[s][p];
+                    if (l<bl)
+                    {
+                        bl = l;
+                        bs = s;
+                        bp = p;
+                    }
+                }
+        if (bl<T+1)
         {
-            best_score = score;
+            used[i] = true;
+            score += 1000000/(H*W*T)*(D[i]-S[i]+1);
+            C[bs][bp].push_back(i);
+        }
+    }
+
+    double temp_inv;
+    int iter;
+
+    int score_best = score;
+    vector<vector<int>> SPbest = SP;
+    vector<vector<vector<int>>> Cbest = C;
+
+    for (iter=0; ; iter++)
+    {
+        if (iter%0x100==0)
+        {
+            system_clock::time_point now = system_clock::now();
+            double time = chrono::duration_cast<chrono::nanoseconds>(now-start).count()*1e-9/TIME;
+            if (time>1.0)
+                break;
+            double temp = 100.*(1.0-time);
+            temp_inv = 1./temp;
+        }
+
+        int sr = xor64()%sn;
+
+        int score_old = score;
+        vector<int> SP_old = SP[sr];
+        vector<vector<int>> C_old = C[sr];
+        vector<int> used_hist;
+
+        switch (xor64()%3)
+        {
+        case 0:
+        {
+            // 追加
+            int pr = xor64()%int(SP[sr].size()-1)+1;
+            if (SP[sr][pr]-SP[sr][pr-1]==1)
+                continue;
+            int np = xor64()%(SP[sr][pr]-SP[sr][pr-1]-1)+SP[sr][pr-1]+1;
+            SP[sr].insert(SP[sr].begin()+pr, np);
+            break;
+        }
+        case 1:
+        {
+            // 削除
+            if (SP[sr].size()==2)
+                continue;
+            int pr = xor64()%int(SP[sr].size()-2)+1;
+            SP[sr].erase(SP[sr].begin()+pr);
+            break;
+        }
+        case 2:
+        {
+            // 移動
+            if (SP[sr].size()==2)
+                continue;
+            int pr = xor64()%int(SP[sr].size()-2)+1;
+            int np = xor64()%(SP[sr][pr+1]-SP[sr][pr-1]-1)+SP[sr][pr-1]+1;
+            SP[sr][pr] = np;
+            break;
+        }
+        }
+
+        // 割り当て更新
+        for (int p=0; p<(int)C[sr].size(); p++)
+            for (int c: C[sr][p])
+            {
+                used[c] = false;
+                used_hist.push_back(c);
+                score -= 1000000/(H*W*T)*(D[c]-S[c]+1);
+            }
+        C[sr] = vector<vector<int>>(SP[sr].size());
+
+        for (int i: I)
+            if (!used[i])
+            {
+                bool ok = false;
+                for (int p=0; p<(int)SP[sr].size()-1 && !ok; p++)
+                    if ((int)C[sr][p].size()<ST[sr]->cn &&
+                        SP[sr][p]<=S[i] && D[i]<SP[sr][p+1])
+                    {
+                        used[i] = true;
+                        used_hist.push_back(i);
+                        score += 1000000/(H*W*T)*(D[i]-S[i]+1);
+                        C[sr][p].push_back(i);
+                        ok = true;
+                    }
+            }
+
+        if (score>score_best)
+        {
+            score_best = score;
             SPbest = SP;
             Cbest = C;
+        }
+
+        if (score>score_old ||
+            my_exp((score-score_old)*temp_inv)>xor64())
+        {
+        }
+        else
+        {
+            score = score_old;
+            SP[sr] = SP_old;
+            C[sr] = C_old;
+            for (int c: used_hist)
+                used[c] = !used[c];
         }
     }
 
@@ -357,11 +464,6 @@ int main()
         // 実行時間
         double time = chrono::duration_cast<chrono::nanoseconds>(end-start).count()*1e-9;
 
-        // スコア
-        int score = 0;
-        for(int k: ans_k)
-            score += 1000000/(H*W*T)*(D[k]-S[k]+1);
-
-        fprintf(stderr, "%d %4d %5.3f %5.3f %6d\n", d, K, (double)L/(H*W*T), time, score);
+        fprintf(stderr, "%d %4d %5.3f %5d %5.3f %6d\n", d, K, (double)L/(H*W*T), iter, time, score_best);
     }
 }
