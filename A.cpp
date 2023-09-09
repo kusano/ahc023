@@ -184,24 +184,26 @@ int main()
     // ここを根とする部分木に植える
     vector<Node *> ST;
     {
+        vector<vector<int>> score(H, vector<int>(W));
+        vector<vector<vector<Node *>>> st(H, vector<vector<Node *>>(W));
+
         function<void(Node *)> f = [&](Node *n)
         {
-            if (n->C.size()==0)
-                return;
-            if (n->C.size()==1)
-                f(n->C[0]);
-            if (n->C.size()>=2)
+            for (Node *c: n->C)
             {
-                for (Node *c: n->C)
-                {
-                    if (c->cn<32 || n->ln==1)
-                        ST.push_back(c);
-                    else
-                        f(c);
-                }
+                f(c);
+                score[n->y][n->x] += score[c->y][c->x];
+                st[n->y][n->x].insert(st[n->y][n->x].begin(), st[c->y][c->x].begin(), st[c->y][c->x].end());
+            }
+            int s = int((98.077-n->cn*0.5668)*25*n->cn);
+            if (s>score[n->y][n->x])
+            {
+                score[n->y][n->x] = s;
+                st[n->y][n->x] = vector<Node *>(1, n);
             }
         };
         f(tree);
+        ST = st[tree->y][tree->x];
     }
     int sn = (int)ST.size();
 
@@ -494,6 +496,18 @@ int main()
 
     // 情報出力
     {
+        /*
+        // 区画数とスコア
+        for (int s=0; s<sn; s++)
+        {
+            int sc = 0;
+            for (auto &c: C[s])
+                for (int x: c)
+                    sc += 25*(D[x]-S[x]+1);
+            cerr<<ST[s]->cn<<" "<<sc<<endl;
+        }
+        */
+
         // d
         int d = 0;
         vector<vector<bool>> M(H+1, vector<bool>(W+1));
