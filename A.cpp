@@ -9,7 +9,7 @@
 using namespace std;
 using namespace std::chrono;
 
-const double TIME = 1.5;
+const double TIME = 1.9;
 
 const int expN = 1024;
 const double expX = 16;
@@ -417,7 +417,7 @@ int main()
     // 出力
     cout<<ans_k.size()<<endl;
     for (int i=0; i<(int)ans_k.size(); i++)
-        cout<<ans_k[i]+1<<" "<<ans_y[i]<<" "<<ans_x[i]<<" "<<ans_s[i]+1<<endl;
+        cout<<ans_k[i]+1<<" "<<ans_y[i]<<" "<<ans_x[i]<<" "<<ans_s[i]+1<<"\n";
 
     system_clock::time_point end = system_clock::now();
 
