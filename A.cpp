@@ -94,26 +94,35 @@ int main()
     const int DX[] = {1, -1, 0, 0};
     const int DY[] = {0, 0, 1, -1};
 
-    // 木の作成
     Node *tree;
+    vector<Node *> ST;
+    int best_tree = 0;
+    for (int iter=0; iter<16; iter++)
     {
-        tree = new Node();
-        tree->x = 0;
-        tree->y = y0;
+        // 木の作成
+        Node *tree_tmp;
+        tree_tmp = new Node();
+        tree_tmp->x = 0;
+        tree_tmp->y = y0;
 
         vector<Node *> V;
-        V.push_back(tree);
+        V.push_back(tree_tmp);
         vector<vector<bool>> U(H, vector<bool>(W));
         U[y0][0] = true;
 
         for (int i=0; i<(int)V.size(); i++)
         {
             Node *n = V[i];
+            int r;
+            if (iter<4)
+                r = iter;
+            else
+                r = xor64()%4;
 
             for (int d=0; d<4; d++)
             {
-                int tx = n->x+DX[d];
-                int ty = n->y+DY[d];
+                int tx = n->x+DX[(d+r)%4];
+                int ty = n->y+DY[(d+r)%4];
                 if (0<=tx && tx<W &&
                     0<=ty && ty<H &&
                     !U[ty][tx] &&
@@ -132,66 +141,63 @@ int main()
             }
         }
 
-        function<void(Node *)> f = [&](Node *n)
+        function<void(Node *)> f1 = [&](Node *n)
         {
             n->cn = 1;
             n->ln = n->C.empty()?1:0;
 
             for (Node *c: n->C)
             {
-                f(c);
+                f1(c);
                 n->cn += c->cn;
                 n->ln += c->ln;
             }
         };
-        f(tree);
-    }
+        f1(tree_tmp);
 
-    /*
-    // 木の表示
-    {
-        vector<string> B(H*2+1, string(W*4+1, ' '));
-        B[0][0] = B[0][W*4] = B[H*2][0] = B[H*2][W*4] = '+';
-        for (int x=1; x<W*4; x++)
-            B[0][x] = B[H*2][x] = '-';
-        for (int y=1; y<H*2; y++)
+        /*
+        // 木の表示
         {
-            if (y!=y0*2+1)
-                B[y][0] = '|';
-            B[y][W*4] = '|';
-        }
-
-        function<void(Node *)> f = [&](Node *n)
-        {
-            B[n->y*2+1][n->x*4+2] = '+';
-            for (Node *c: n->C)
+            vector<string> B(H*2+1, string(W*4+1, ' '));
+            B[0][0] = B[0][W*4] = B[H*2][0] = B[H*2][W*4] = '+';
+            for (int x=1; x<W*4; x++)
+                B[0][x] = B[H*2][x] = '-';
+            for (int y=1; y<H*2; y++)
             {
-                if (n->x==c->x)
-                    B[(n->y+c->y)+1][n->x*4+2] = '|';
-                else
-                    for (int i=0; i<3; i++)
-                        B[n->y*2+1][(n->x+c->x)*2+i+1] = '-';
-                f(c);
+                if (y!=y0*2+1)
+                    B[y][0] = '|';
+                B[y][W*4] = '|';
             }
-        };
-        f(tree);
 
-        for (string b: B)
-            cout<<b<<endl;
-    }
-    */
+            function<void(Node *)> f = [&](Node *n)
+            {
+                B[n->y*2+1][n->x*4+2] = '+';
+                for (Node *c: n->C)
+                {
+                    if (n->x==c->x)
+                        B[(n->y+c->y)+1][n->x*4+2] = '|';
+                    else
+                        for (int i=0; i<3; i++)
+                            B[n->y*2+1][(n->x+c->x)*2+i+1] = '-';
+                    f(c);
+                }
+            };
+            f(tree_tmp);
 
-    // ここを根とする部分木に植える
-    vector<Node *> ST;
-    {
+            for (string b: B)
+                cout<<b<<endl;
+        }
+        */
+
+        // 部分木を決める
         vector<vector<int>> score(H, vector<int>(W));
         vector<vector<vector<Node *>>> st(H, vector<vector<Node *>>(W));
 
-        function<void(Node *)> f = [&](Node *n)
+        function<void(Node *)> f2 = [&](Node *n)
         {
             for (Node *c: n->C)
             {
-                f(c);
+                f2(c);
                 score[n->y][n->x] += score[c->y][c->x];
                 st[n->y][n->x].insert(st[n->y][n->x].begin(), st[c->y][c->x].begin(), st[c->y][c->x].end());
             }
@@ -202,8 +208,14 @@ int main()
                 st[n->y][n->x] = vector<Node *>(1, n);
             }
         };
-        f(tree);
-        ST = st[tree->y][tree->x];
+        f2(tree_tmp);
+
+        if (score[tree_tmp->y][tree_tmp->x]>best_tree)
+        {
+            best_tree = score[tree_tmp->y][tree_tmp->x];
+            tree = tree_tmp;
+            ST = st[tree_tmp->y][tree_tmp->x];
+        }
     }
     int sn = (int)ST.size();
 
