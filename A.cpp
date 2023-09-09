@@ -358,6 +358,8 @@ int main()
             int pr = xor64()%int(SP[sr].size()-2)+1;
             SP[sr].erase(SP[sr].begin()+pr);
             remove(pr);
+            remove(pr-1);
+            add(pr-1);
             break;
         }
         case 2:
