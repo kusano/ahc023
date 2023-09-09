@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <functional>
 #include <tuple>
+#include <set>
 using namespace std;
 using namespace std::chrono;
 
@@ -108,7 +109,6 @@ int main()
         for (int i=0; i<(int)V.size(); i++)
         {
             Node *n = V[i];
-            int r = xor64()%4;
 
             for (int d=0; d<4; d++)
             {
@@ -273,6 +273,7 @@ int main()
         }
     }
 
+    double time;
     double temp_inv;
     int iter;
 
@@ -285,7 +286,7 @@ int main()
         if (iter%0x100==0)
         {
             system_clock::time_point now = system_clock::now();
-            double time = chrono::duration_cast<chrono::nanoseconds>(now-start).count()*1e-9/TIME;
+            time = chrono::duration_cast<chrono::nanoseconds>(now-start).count()*1e-9/TIME;
             if (time>1.0)
                 break;
             double temp = 100.*(1.0-time);
@@ -378,16 +379,58 @@ int main()
         }
         }
 
-        if (score>score_best)
-        {
-            score_best = score;
-            SPbest = SP;
-            Cbest = C;
-        }
-
         if (score>score_old ||
             my_exp((score-score_old)*temp_inv)>xor64())
         {
+            if (score>score_best)
+            {
+                score_best = score;
+                SPbest = SP;
+                Cbest = C;
+
+                // 後半は全体を更新し直す
+                if (time>0.5)
+                {
+                    for (int s=0; s<(int)C.size(); s++)
+                        for (int p=0; p<(int)C[s].size(); p++)
+                            C[s][p].clear();
+                    score = 0;
+                    for (int i=0; i<K; i++)
+                        used[i] = false;
+                    for (int i: I)
+                    {
+                        int bl = T+1;
+                        int bs = 0;
+                        int bp = 0;
+                        for (int s=0; s<sn; s++)
+                            for (int p=0; p<(int)SP[s].size()-1; p++)
+                                if ((int)C[s][p].size()<ST[s]->cn &&
+                                    SP[s][p]<=S[i] && D[i]<SP[s][p+1])
+                                {
+                                    int l = SP[s][p+1]-SP[s][p];
+                                    if (l<bl)
+                                    {
+                                        bl = l;
+                                        bs = s;
+                                        bp = p;
+                                    }
+                                }
+                        if (bl<T+1)
+                        {
+                            used[i] = true;
+                            score += 25*(D[i]-S[i]+1);
+                            C[bs][bp].push_back(i);
+                        }
+                    }
+
+                    if (score>score_best)
+                    {
+                        score_best = score;
+                        SPbest = SP;
+                        Cbest = C;
+                    }
+                }
+            }
         }
         else
         {
@@ -445,6 +488,9 @@ int main()
         cout<<ans_k[i]+1<<" "<<ans_y[i]<<" "<<ans_x[i]<<" "<<ans_s[i]+1<<"\n";
 
     system_clock::time_point end = system_clock::now();
+
+    if (set<int>(ans_k.begin(), ans_k.end()).size()!=ans_k.size())
+        cerr<<"error"<<endl;
 
     // 情報出力
     {
