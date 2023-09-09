@@ -205,47 +205,66 @@ int main()
     }
     int sn = (int)ST.size();
 
-    // 区間の区切り
-    vector<vector<int>> SP(sn);
-    for (int i=0; i<sn; i++)
-    {
-        SP[i].push_back(0);
-        SP[i].push_back(T);
-        for (int j=0; j<7; j++)
-            SP[i].push_back(xor64()%(T-1)+1);
-        sort(SP[i].begin(), SP[i].end());
-    }
+    int best_score = 0;
+    vector<vector<int>> SPbest(sn);
+    vector<vector<vector<int>>> Cbest(sn);
 
-    // 長さの降順にソート
-    vector<int> I;
-    for (int i=0; i<K; i++)
-        I.push_back(i);
-    sort(I.begin(), I.end(), [&](int x, int y){return D[x]-S[x]>D[y]-S[y];});
-
-    // 長さの降順に、なるべく短い区間に割り当てる
-    vector<vector<vector<int>>> C(sn);
-    for (int i=0; i<sn; i++)
-        C[i].resize(SP[i].size());
-    for (int i: I)
+    for (int iter=0; iter<128; iter++)
     {
-        int bl = T+1;
-        int bs = 0;
-        int bp = 0;
-        for (int s=0; s<sn; s++)
-            for (int p=0; p<(int)SP[s].size()-1; p++)
-                if ((int)C[s][p].size()<ST[s]->cn &&
-                    SP[s][p]<=S[i] && D[i]<SP[s][p+1])
-                {
-                    int l = SP[s][p+1]-SP[s][p];
-                    if (l<bl)
+        // 区間の区切り
+        vector<vector<int>> SP(sn);
+        for (int i=0; i<sn; i++)
+        {
+            SP[i].push_back(0);
+            SP[i].push_back(T);
+            for (int j=0; j<7; j++)
+                SP[i].push_back(xor64()%(T-1)+1);
+            sort(SP[i].begin(), SP[i].end());
+        }
+
+        // 長さの降順にソート
+        vector<int> I;
+        for (int i=0; i<K; i++)
+            I.push_back(i);
+        sort(I.begin(), I.end(), [&](int x, int y){return D[x]-S[x]>D[y]-S[y];});
+
+        // 長さの降順に、なるべく短い区間に割り当てる
+        vector<vector<vector<int>>> C(sn);
+        for (int i=0; i<sn; i++)
+            C[i].resize(SP[i].size());
+        for (int i: I)
+        {
+            int bl = T+1;
+            int bs = 0;
+            int bp = 0;
+            for (int s=0; s<sn; s++)
+                for (int p=0; p<(int)SP[s].size()-1; p++)
+                    if ((int)C[s][p].size()<ST[s]->cn &&
+                        SP[s][p]<=S[i] && D[i]<SP[s][p+1])
                     {
-                        bl = l;
-                        bs = s;
-                        bp = p;
+                        int l = SP[s][p+1]-SP[s][p];
+                        if (l<bl)
+                        {
+                            bl = l;
+                            bs = s;
+                            bp = p;
+                        }
                     }
-                }
-        if (bl<T+1)
-            C[bs][bp].push_back(i);
+            if (bl<T+1)
+                C[bs][bp].push_back(i);
+        }
+
+        int score = 0;
+        for (int s=0; s<sn; s++)
+            for (int p=0; p<(int)C[s].size(); p++)
+                for (int c: C[s][p])
+                    score += 1000000/(H*W*T)*(D[c]-S[c]+1);
+        if (score>best_score)
+        {
+            best_score = score;
+            SPbest = SP;
+            Cbest = C;
+        }
     }
 
     // 配置
@@ -275,15 +294,15 @@ int main()
             Y[i] = get<2>(DXY[i]);
         }
 
-        for (int p=0; p<(int)SP[s].size()-1; p++)
+        for (int p=0; p<(int)SPbest[s].size()-1; p++)
         {
-            sort(C[s][p].begin(), C[s][p].end(), [&](int x, int y){return D[x]<D[y];});
-            for (int i=0; i<(int)C[s][p].size(); i++)
+            sort(Cbest[s][p].begin(), Cbest[s][p].end(), [&](int x, int y){return D[x]<D[y];});
+            for (int i=0; i<(int)Cbest[s][p].size(); i++)
             {
-                ans_k.push_back(C[s][p][i]);
+                ans_k.push_back(Cbest[s][p][i]);
                 ans_x.push_back(X[i]);
                 ans_y.push_back(Y[i]);
-                ans_s.push_back(SP[s][p]);
+                ans_s.push_back(SPbest[s][p]);
             }
         }
     }
