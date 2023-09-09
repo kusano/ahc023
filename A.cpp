@@ -211,6 +211,11 @@ int main()
         I.push_back(i);
     sort(I.begin(), I.end(), [&](int x, int y){return D[x]-S[x]>D[y]-S[y];});
 
+    // D別
+    vector<vector<int>> I2(T);
+    for (int i=0; i<K; i++)
+        I2[D[i]].push_back(i);
+
     // 区間の区切り
     vector<vector<int>> SP(sn);
     for (int i=0; i<sn; i++)
@@ -263,7 +268,7 @@ int main()
         if (bl<T+1)
         {
             used[i] = true;
-            score += 1000000/(H*W*T)*(D[i]-S[i]+1);
+            score += 25*(D[i]-S[i]+1);
             C[bs][bp].push_back(i);
         }
     }
@@ -294,6 +299,42 @@ int main()
         vector<vector<int>> C_old = C[sr];
         vector<int> used_hist;
 
+        // 割り当てから区間を削除
+        auto remove = [&](int p)
+        {
+            for (int c: C[sr][p])
+            {
+                used[c] = false;
+                used_hist.push_back(c);
+                score -= 25*(D[c]-S[c]+1);
+            }
+            C[sr].erase(C[sr].begin()+p);
+        };
+
+        // 割り当てに区間を追加
+        // Pに追加してから呼ぶ
+        auto add = [&](int p)
+        {
+            vector<int> cand;
+            for (int t=SP[sr][p]+1; t<SP[sr][p+1]; t++)
+                for (int i: I2[t])
+                    if (!used[i] && S[i]>=SP[sr][p])
+                        cand.push_back(i);
+            sort(cand.begin(), cand.end(), [&](int x, int y){return D[x]-S[x]>D[y]-S[y];});
+
+            C[sr].insert(C[sr].begin()+p, vector<int>());
+            for (int c=0; c<(int)cand.size() && c<ST[sr]->cn; c++)
+            {
+                int i = cand[c];
+
+                C[sr][p].push_back(i);
+
+                used[i] = true;
+                used_hist.push_back(i);
+                score += 25*(D[i]-S[i]+1);
+            }
+        };
+
         switch (xor64()%3)
         {
         case 0:
@@ -304,6 +345,9 @@ int main()
                 continue;
             int np = xor64()%(SP[sr][pr]-SP[sr][pr-1]-1)+SP[sr][pr-1]+1;
             SP[sr].insert(SP[sr].begin()+pr, np);
+            remove(pr-1);
+            add(pr-1);
+            add(pr);
             break;
         }
         case 1:
@@ -313,6 +357,7 @@ int main()
                 continue;
             int pr = xor64()%int(SP[sr].size()-2)+1;
             SP[sr].erase(SP[sr].begin()+pr);
+            remove(pr);
             break;
         }
         case 2:
@@ -323,35 +368,13 @@ int main()
             int pr = xor64()%int(SP[sr].size()-2)+1;
             int np = xor64()%(SP[sr][pr+1]-SP[sr][pr-1]-1)+SP[sr][pr-1]+1;
             SP[sr][pr] = np;
+            remove(pr);
+            remove(pr-1);
+            add(pr-1);
+            add(pr);
             break;
         }
         }
-
-        // 割り当て更新
-        for (int p=0; p<(int)C[sr].size(); p++)
-            for (int c: C[sr][p])
-            {
-                used[c] = false;
-                used_hist.push_back(c);
-                score -= 1000000/(H*W*T)*(D[c]-S[c]+1);
-            }
-        C[sr] = vector<vector<int>>(SP[sr].size());
-
-        for (int i: I)
-            if (!used[i])
-            {
-                bool ok = false;
-                for (int p=0; p<(int)SP[sr].size()-1 && !ok; p++)
-                    if ((int)C[sr][p].size()<ST[sr]->cn &&
-                        SP[sr][p]<=S[i] && D[i]<SP[sr][p+1])
-                    {
-                        used[i] = true;
-                        used_hist.push_back(i);
-                        score += 1000000/(H*W*T)*(D[i]-S[i]+1);
-                        C[sr][p].push_back(i);
-                        ok = true;
-                    }
-            }
 
         if (score>score_best)
         {
@@ -464,6 +487,6 @@ int main()
         // 実行時間
         double time = chrono::duration_cast<chrono::nanoseconds>(end-start).count()*1e-9;
 
-        fprintf(stderr, "%d %4d %5.3f %5d %5.3f %6d\n", d, K, (double)L/(H*W*T), iter, time, score_best);
+        fprintf(stderr, "%d %4d %5.3f %6d %5.3f %6d\n", d, K, (double)L/(H*W*T), iter, time, score_best);
     }
 }
