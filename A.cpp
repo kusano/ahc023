@@ -553,19 +553,35 @@ int main()
                                 ok = false;
                         if (ok)
                         {
+                            // 直前のAが真のところから開始できるなら、ずらす
+                            int ss = S[i];
+                            while (ss>=0 && !A[n->y][n->x][2*ss])
+                                ss--;
+                            if (ss==-1)
+                                ss = S[i];
+                            else
+                            {
+                                bool ok = true;
+                                for (int t=ss*2+1; t<S[i]*2; t+=2)
+                                    if (A[n->y][n->x][t])
+                                        ok = false;
+                                if (!ok)
+                                    ss = S[i];
+                            }
+
                             score_best += 25*(D[i]-S[i]+1);
 
                             ans_k.push_back(i);
                             ans_x.push_back(n->x);
                             ans_y.push_back(n->y);
-                            ans_s.push_back(S[i]);
+                            ans_s.push_back(ss);
 
                             used[i] = true;
                             C2[n->y][n->x].push_back(i);
 
-                            A[n->y][n->x][2*S[i]] = true;
+                            A[n->y][n->x][2*ss] = true;
                             A[n->y][n->x][2*D[i]+1] = true;
-                            for (int t=S[i]; t<=D[i]; t++)
+                            for (int t=ss; t<=D[i]; t++)
                                 B[t] = true;
                         }
                     }
