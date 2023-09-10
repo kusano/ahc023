@@ -51,6 +51,7 @@ int xor64() {
 struct Node
 {
     int x, y;
+    int d;
     int cn;
     int ln;
     vector<Node *> C;
@@ -104,6 +105,7 @@ int main()
         tree_tmp = new Node();
         tree_tmp->x = 0;
         tree_tmp->y = y0;
+        tree_tmp->d = 0;
 
         vector<Node *> V;
         V.push_back(tree_tmp);
@@ -116,6 +118,8 @@ int main()
             int r;
             if (iter<4)
                 r = iter;
+            else if (iter==4)
+                r = n->d;
             else
                 r = xor64()%4;
 
@@ -134,6 +138,7 @@ int main()
                     Node *c = new Node();
                     c->x = tx;
                     c->y = ty;
+                    c->d = (d+r)%4;
 
                     n->C.push_back(c);
                     V.push_back(c);
@@ -212,6 +217,7 @@ int main()
 
         if (score[tree_tmp->y][tree_tmp->x]>best_tree)
         {
+            //cerr<<iter<<endl;
             best_tree = score[tree_tmp->y][tree_tmp->x];
             tree = tree_tmp;
             ST = st[tree_tmp->y][tree_tmp->x];
@@ -494,6 +500,78 @@ int main()
                 ans_s.push_back(SPbest[s][p]);
             }
         }
+    }
+
+    // 置けるところに詰め込む
+    {
+        vector<bool> used(K);
+        vector<vector<vector<int>>> C2(H, vector<vector<int>>(W));
+        vector<int> S2(K);
+        for (int i=0; i<(int)ans_k.size(); i++)
+        {
+            used[ans_k[i]] = true;
+            C2[ans_y[i]][ans_x[i]].push_back(ans_k[i]);
+            S2[ans_k[i]] = ans_s[i];
+        }
+
+        vector<vector<bool>> st(H, vector<bool>(W));
+        for (Node *n: ST)
+            st[n->y][n->x] = true;
+
+        vector<vector<vector<bool>>> A(H, vector<vector<bool>>(W, vector<bool>(2*T)));
+
+        function<void(Node *, int)> f = [&](Node *n, bool canplant)
+        {
+            for (Node *c: n->C)
+            {
+                f(c, st[n->y][n->x]?false:canplant);
+                for (int i=0; i<2*T; i++)
+                    if (A[c->y][c->x][i])
+                        A[n->y][n->x][i] = true;
+            }
+
+            vector<bool> B(T);
+            for (int c: C2[n->y][n->x])
+            {
+                A[n->y][n->x][S2[c]*2] = true;
+                A[n->y][n->x][D[c]*2+1] = true;
+                for (int i=S2[c]; i<=D[c]; i++)
+                    B[i] = true;
+            }
+
+            if (canplant)
+            {
+                for (int i: I)
+                    if (!used[i])
+                    {
+                        bool ok = true;
+                        for (int t=S[i]*2+1; t<=D[i]*2 && ok; t++)
+                            if (A[n->y][n->x][t])
+                                ok = false;
+                        for (int t=S[i]; t<=D[i] && ok; t++)
+                            if (B[t])
+                                ok = false;
+                        if (ok)
+                        {
+                            score_best += 25*(D[i]-S[i]+1);
+
+                            ans_k.push_back(i);
+                            ans_x.push_back(n->x);
+                            ans_y.push_back(n->y);
+                            ans_s.push_back(S[i]);
+
+                            used[i] = true;
+                            C2[n->y][n->x].push_back(i);
+
+                            A[n->y][n->x][2*S[i]] = true;
+                            A[n->y][n->x][2*D[i]+1] = true;
+                            for (int t=S[i]; t<=D[i]; t++)
+                                B[t] = true;
+                        }
+                    }
+            }
+        };
+        f(tree, true);
     }
 
     // 出力
